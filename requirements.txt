@@ -1,0 +1,56 @@
+Django==6.0
+
+# Database
+psycopg[binary]>=3.1 # محرك البوستجرس الحديث
+dj-database-url      # لضبط الاتصال عبر المتغيرات
+
+# Real-time & Async (WebSockets)
+channels[daphne]>=4.0  # السيرفر الذي سيدير الـ WebSockets
+channels-redis>=4.1      # وسيط الرسائل
+
+# Caching & Redis
+django-redis>=5.4
+redis>=5.0
+
+# HTTP & API (Azure Integration)
+requests>=2.31
+httpx>=0.27  # سنحتاجه للـ Async Requests لـ Azure لعدم تجميد السيرفر
+
+# Environment Management
+python-dotenv>=1.0
+django-environ>=0.11
+
+# Image Processing (Optional but good for PWA icons)
+Pillow>=10.2
+
+# Utilities
+gunicorn>=21.2 # لتشغيل الـ WSGI إذا لزم الأمر
+
+cryptography>=42.0.0
+nh3>=0.2.15
+
+
+django-csp>=3.7
+django-axes>=6.0
+
+whitenoise
+
+
+openai>=1.12.0
+
+django-unfold
+
+celery>=5.3.6
+
+django-import-export
+
+
+openpyxl
+
+# Azure Storage for Media Files
+django-storages[azure]>=1.14.2
+azure-storage-blob>=12.19.0
+
+# Database
+psycopg2-binary>=2.9.9  # تأكد من وجودها للإنتاج
+gunicorn>=21.2.0        # (اختياري) ولكن Daphne ممتاز أيضاً
