@@ -1,0 +1,49 @@
+name: Trigger auto deployment for camp-web
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/camp-web-AutoDeployTrigger-ef025bff-8141-49b2-bc96-f8e5f70cad14.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:      
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.CAMPWEB_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.CAMPWEB_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.CAMPWEB_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}/docker/local/django
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: campregistry2026.azurecr.io
+          registryUsername: ${{ secrets.CAMPWEB_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.CAMPWEB_REGISTRY_PASSWORD }}
+          containerAppName: camp-web
+          resourceGroup: MedCamp-RG
+          imageToBuild: campregistry2026.azurecr.io/camp-web:${{ github.sha }}
+          _buildArgumentsKey_: |
+            _buildArgumentsValues_
+
+
