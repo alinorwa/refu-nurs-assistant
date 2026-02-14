@@ -116,23 +116,97 @@ DATABASES = {
     }
 }
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [(env('REDIS_HOST', default='redis'), 6379)],
+
+
+# ==============================================================================
+# 🗄️ REDIS & CACHE CONFIGURATION (Fixed for Azure)
+# ==============================================================================
+
+# قراءة رابط الريديس الكامل (إذا كنا في Azure)
+REDIS_URL = env('REDIS_URL', default=None)
+
+if REDIS_URL:
+    # --- إعدادات الإنتاج (Azure) ---
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL], # نستخدم الرابط الكامل كما هو
+            },
         },
+    }
+    
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                # ضروري لتجاهل مشاكل شهادات SSL في بعض الأحيان
+                "CONNECTION_POOL_KWARGS": {"ssl_cert_reqs": None},
+            }
+        }
+    }
+    
+    # إعدادات Celery للإنتاج
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = REDIS_URL
+
+else:
+    # --- إعدادات التطوير المحلي (Docker Local) ---
+    # نستخدم القيم الافتراضية القديمة
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [("redis", 6379)],
+            },
+        },
+    }
+
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": "redis://redis:6379/1",
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        }
+    }
+    
+    CELERY_BROKER_URL = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND = "redis://redis:6379/0"
+
+# ... (باقي إعدادات Celery مثل TIMEZONE و CONCURRENCY كما هي) ...
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_WORKER_CONCURRENCY = 2
+
+# ==============================================================================
+# 🐇 CELERY
+# ==============================================================================
+
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_WORKER_CONCURRENCY = 2
+
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    # المهمة الأولى: فحص الأوبئة (كل 15 دقيقة)
+    'epidemic-warning-every-15-minutes': {
+        'task': 'apps.chat.tasks.check_epidemic_outbreak',
+        'schedule': crontab(minute='*/15'), 
+    },
+    # 🛑 المهمة الثانية (الجديدة): التنظيف اليومي (الساعة 3 فجراً بتوقيت السيرفر)
+    'gdpr-cleanup-every-day': {
+        'task': 'apps.chat.tasks.delete_old_data',
+        'schedule': crontab( minute='*'), 
     },
 }
-
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"redis://{env('REDIS_HOST', default='redis')}:6379/1",
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"}
-    }
-}
-
 # ==============================================================================
 # 🔒 AUTH & SECURITY
 # ==============================================================================
@@ -169,30 +243,7 @@ AZURE_OPENAI_ENDPOINT = env('AZURE_OPENAI_ENDPOINT')
 AZURE_OPENAI_KEY = env('AZURE_OPENAI_KEY')
 AZURE_OPENAI_DEPLOYMENT_NAME = env('AZURE_OPENAI_DEPLOYMENT_NAME', default='gpt-4o')
 
-# ==============================================================================
-# 🐇 CELERY
-# ==============================================================================
-CELERY_BROKER_URL = f"redis://{env('REDIS_HOST', default='redis')}:6379/0"
-CELERY_RESULT_BACKEND = f"redis://{env('REDIS_HOST', default='redis')}:6379/0"
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_WORKER_CONCURRENCY = 2
 
-from celery.schedules import crontab
-CELERY_BEAT_SCHEDULE = {
-    # المهمة الأولى: فحص الأوبئة (كل 15 دقيقة)
-    'epidemic-warning-every-15-minutes': {
-        'task': 'apps.chat.tasks.check_epidemic_outbreak',
-        'schedule': crontab(minute='*/15'), 
-    },
-    # 🛑 المهمة الثانية (الجديدة): التنظيف اليومي (الساعة 3 فجراً بتوقيت السيرفر)
-    'gdpr-cleanup-every-day': {
-        'task': 'apps.chat.tasks.delete_old_data',
-        'schedule': crontab( minute='*'), 
-    },
-}
 
 # ==============================================================================
 # 🎨 STATIC & MEDIA & UI
