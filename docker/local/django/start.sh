@@ -11,4 +11,5 @@ echo "Collecting static files..."
 python manage.py collectstatic --no-input
 
 echo "Starting Daphne Server..."
-daphne -b 0.0.0.0 -p 8000 config.asgi:application
+PORT=${PORT:-8000}
+daphne -b 0.0.0.0 -p $PORT config.asgi:application
