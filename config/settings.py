@@ -365,7 +365,15 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # ==============================================================================
 
 # قائمة المصادر الموثوقة (يجب إضافة العناوين التي تفتح منها الموقع)
-CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=["http://localhost:8000"]) 
+CSRF_TRUSTED_ORIGINS = env.list(
+    'CSRF_TRUSTED_ORIGINS',
+    default=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://camp-web.graymushroom-26f94677.norwayeast.azurecontainerapps.io",
+    ]
+)
+
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
