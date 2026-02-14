@@ -95,11 +95,24 @@ USE_TZ = True
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'camp_medical_db',
-        'USER': 'postgres',
-        'PASSWORD': env('DB_PASSWORD'), 
-        'HOST': 'host.docker.internal',
-        'PORT': '5432',
+        
+        # 1. اسم قاعدة البيانات
+        # في Azure سيكون 'postgres'، وفي جهازك 'camp_medical_db'
+        'NAME': env('DB_NAME', default='camp_medical_db'),
+        
+        # 2. اسم المستخدم
+        # في Azure سيكون 'dbadmin'، وفي جهازك 'postgres'
+        'USER': env('DB_USER', default='postgres'),
+        
+        # 3. كلمة المرور
+        # تأتي من ملف .env أو إعدادات Azure
+        'PASSWORD': env('DB_PASSWORD', default='123'), 
+        
+        # 4. الرابط (أهم نقطة) 🛑
+        # في Azure سيقرأ الرابط الحقيقي، وفي جهازك سيقرأ host.docker.internal
+        'HOST': env('DB_HOST', default='host.docker.internal'),
+        
+        'PORT': env('DB_PORT', default='5432'),
     }
 }
 
