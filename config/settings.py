@@ -390,7 +390,7 @@ CONTENT_SECURITY_POLICY = {
         "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-        "img-src": ["'self'", "data:", "https://www.gravatar.com"],
+        "img-src": ["'self'", "data:", "https://www.gravatar.com", "https://*.blob.core.windows.net",],
         
         "connect-src": [
             "'self'",
@@ -398,6 +398,8 @@ CONTENT_SECURITY_POLICY = {
             "ws://127.0.0.1:8000",
             "ws://host.docker.internal:8000",
             "ws://192.168.1.50:8000", # IP جهازك للموبايل
+             # يفضل إضافة رابط موقعك في Azure هنا أيضاً لضمان عمل الويب سوكيت
+            "wss://*.azurecontainerapps.io",
         ],
     }
 }
