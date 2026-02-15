@@ -1,11 +1,12 @@
 """
 Django settings for config project.
-Standard Production-Ready Configuration.
+Standard Production-Ready Configuration (Optimized for Azure).
 """
 
 import os
 from pathlib import Path
 import environ
+import ssl
 from datetime import timedelta
 from django.templatetags.static import static
 from django.urls import reverse_lazy
@@ -13,6 +14,7 @@ from django.utils.translation import gettext_lazy as _
 
 # 1. تهيئة البيئة
 env = environ.Env()
+# قراءة ملف .env إذا وجد (للتطوير المحلي)
 environ.Env.read_env(os.path.join(Path(__file__).resolve().parent.parent, '.env'))
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,19 +23,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # 🛡️ CORE SECURITY
 # ==============================================================================
 
+# يجب أن يكون False في Azure (نقوم بضبطه عبر متغير بيئة في Azure Portal)
 DEBUG = env.bool('DJANGO_DEBUG', False)
-SECRET_KEY = env('DJANGO_SECRET_KEY')
-DB_ENCRYPTION_KEY = env('DB_ENCRYPTION_KEY')
 
-# السماح بالدومينات (بما فيها IP الشبكة المحلية للهاتف)
-ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['localhost', '127.0.0.1', '*'])
+SECRET_KEY = env('DJANGO_SECRET_KEY', default='unsafe-secret-key-change-in-prod')
+DB_ENCRYPTION_KEY = env('DB_ENCRYPTION_KEY', default='sEcret_Key_Must_Be_32_UrlSafe_Base64=')
+
+# السماح لجميع النطاقات (لأن Azure Load Balancer يقف أمامنا)
+ALLOWED_HOSTS = ["*"]
 
 # ==============================================================================
 # 🧩 APPS & MIDDLEWARE
 # ==============================================================================
 
 INSTALLED_APPS = [
-    'daphne',
+    'daphne', # ASGI Server
     
     # UI Theme
     "unfold",
@@ -53,8 +57,8 @@ INSTALLED_APPS = [
     'channels',
     'csp',
     'axes',
-    # unfold
-    "import_export",
+    'import_export',
+    
     # Local Apps
     'apps.accounts',
     'apps.chat',
@@ -63,13 +67,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
-    "csp.middleware.CSPMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware", # لملفات الستاتيك
+    "csp.middleware.CSPMiddleware",               # حماية المحتوى
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "axes.middleware.AxesMiddleware",
+    "axes.middleware.AxesMiddleware",             # حماية الدخول
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -78,64 +82,37 @@ ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = 'config.asgi.application'
 
-
-
 # ==============================================================================
-# 🌐 INTERNATIONALIZATION
-# ==============================================================================
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = 'Europe/Oslo'
-USE_I18N = True
-USE_TZ = True
-
-# ==============================================================================
-# 🗄️ DATABASE & CACHE
+# 🗄️ DATABASE
 # ==============================================================================
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        
-        # 1. اسم قاعدة البيانات
-        # في Azure سيكون 'postgres'، وفي جهازك 'camp_medical_db'
         'NAME': env('DB_NAME', default='camp_medical_db'),
-        
-        # 2. اسم المستخدم
-        # في Azure سيكون 'dbadmin'، وفي جهازك 'postgres'
         'USER': env('DB_USER', default='postgres'),
-        
-        # 3. كلمة المرور
-        # تأتي من ملف .env أو إعدادات Azure
         'PASSWORD': env('DB_PASSWORD', default='123'), 
-        
-        # 4. الرابط (أهم نقطة) 🛑
-        # في Azure سيقرأ الرابط الحقيقي، وفي جهازك سيقرأ host.docker.internal
         'HOST': env('DB_HOST', default='host.docker.internal'),
-        
         'PORT': env('DB_PORT', default='5432'),
     }
 }
 
-
-
 # ==============================================================================
-# 🗄️ REDIS & CACHE CONFIGURATION (Fixed for Azure)
+# 🗄️ REDIS & CACHE (With SSL Fix)
 # ==============================================================================
 
-# قراءة رابط الريديس الكامل (إذا كنا في Azure)
 REDIS_URL = env('REDIS_URL', default=None)
 
 if REDIS_URL:
-    import ssl
-     # --- إعدادات الإنتاج (Azure) ---
+    # --- إعدادات الإنتاج (Azure) ---
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
                 "hosts": [
                     {
-                        "address": REDIS_URL,  # الرابط الكامل (rediss://...)
-                        "ssl_cert_reqs": ssl.CERT_NONE,  # 🛑 الحل السحري: تجاهل التحقق من الشهادة
+                        "address": REDIS_URL,
+                        "ssl_cert_reqs": ssl.CERT_NONE,  # 🛑 الحل لمشاكل الاتصال في Azure
                     }
                 ],
                 "capacity": 1500,
@@ -150,72 +127,63 @@ if REDIS_URL:
             "LOCATION": REDIS_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                # الكاش يحتاج هذا التنسيق المختلف
-                "CONNECTION_POOL_KWARGS": {
-                    "ssl_cert_reqs": ssl.CERT_NONE
-                }, 
+                "CONNECTION_POOL_KWARGS": {"ssl_cert_reqs": ssl.CERT_NONE},
             }
         }
     }
     
-    # Celery
     CELERY_BROKER_URL = REDIS_URL
     CELERY_RESULT_BACKEND = REDIS_URL
-    # إعدادات SSL الخاصة بـ Celery
     CELERY_REDIS_BACKEND_USE_SSL = {"ssl_cert_reqs": ssl.CERT_NONE}
     CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": ssl.CERT_NONE}
 
 else:
-    # --- إعدادات التطوير المحلي (Docker Local) ---
-    # نستخدم القيم الافتراضية القديمة
+    # --- إعدادات التطوير المحلي ---
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
-            "CONFIG": {
-                "hosts": [("redis", 6379)],
-            },
+            "CONFIG": {"hosts": [("redis", 6379)]},
         },
     }
-
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": "redis://redis:6379/1",
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            }
+            "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"}
         }
     }
-    
     CELERY_BROKER_URL = "redis://redis:6379/0"
     CELERY_RESULT_BACKEND = "redis://redis:6379/0"
 
-# ... (باقي إعدادات Celery مثل TIMEZONE و CONCURRENCY كما هي) ...
+# ==============================================================================
+# 🐇 CELERY SETTINGS
+# ==============================================================================
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+CELERY_TIMEZONE = TIME_ZONE # سيتم تعريف TIME_ZONE في الأسفل
 CELERY_WORKER_CONCURRENCY = 2
-
-# ==============================================================================
-# 🐇 CELERY
-# ==============================================================================
-
-
 
 from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
-    # المهمة الأولى: فحص الأوبئة (كل 15 دقيقة)
     'epidemic-warning-every-15-minutes': {
         'task': 'apps.chat.tasks.check_epidemic_outbreak',
         'schedule': crontab(minute='*/15'), 
     },
-    # 🛑 المهمة الثانية (الجديدة): التنظيف اليومي (الساعة 3 فجراً بتوقيت السيرفر)
     'gdpr-cleanup-every-day': {
         'task': 'apps.chat.tasks.delete_old_data',
-        'schedule': crontab( minute='*'), 
+        'schedule': crontab(hour=3, minute=0), 
     },
 }
+
+# ==============================================================================
+# 🌐 INTERNATIONALIZATION
+# ==============================================================================
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = 'Europe/Oslo'
+USE_I18N = True
+USE_TZ = True
+
 # ==============================================================================
 # 🔒 AUTH & SECURITY
 # ==============================================================================
@@ -234,12 +202,17 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# إعدادات الحماية من التخمين
 AXES_FAILURE_LIMIT = 5          
-AXES_COOLOFF_TIME = timedelta(minutes=1)     
+AXES_COOLOFF_TIME = timedelta(minutes=10)     
 AXES_RESET_ON_SUCCESS = True    
 AXES_LOCKOUT_TEMPLATE = 'accounts/lockout.html'
 AXES_CLIENT_IP_CALLABLE = 'apps.core.utils.get_client_ip'
+
+LOGIN_URL = '/auth/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/auth/login/'
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # ==============================================================================
 # 🧠 AI SERVICES
@@ -252,22 +225,41 @@ AZURE_OPENAI_ENDPOINT = env('AZURE_OPENAI_ENDPOINT')
 AZURE_OPENAI_KEY = env('AZURE_OPENAI_KEY')
 AZURE_OPENAI_DEPLOYMENT_NAME = env('AZURE_OPENAI_DEPLOYMENT_NAME', default='gpt-4o')
 
-
-
 # ==============================================================================
-# 🎨 STATIC & MEDIA & UI
+# 🎨 STATIC & MEDIA & STORAGE
 # ==============================================================================
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# هل نحن في Azure؟ (نقوم بضبط هذا المتغير في Azure Portal)
+IN_AZURE_DEPLOYMENT = env.bool('IN_AZURE_DEPLOYMENT', False)
 
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
-}
+if IN_AZURE_DEPLOYMENT:
+    # --- إعدادات التخزين السحابي (Azure Blob) ---
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.azure_storage.AzureStorage",
+            "OPTIONS": {
+                "account_name": env('AZURE_STORAGE_ACCOUNT_NAME'),
+                "account_key": env('AZURE_STORAGE_ACCOUNT_KEY'),
+                "azure_container": "media",
+                "expiration_secs": None,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    MEDIA_URL = f"https://{env('AZURE_STORAGE_ACCOUNT_NAME')}.blob.core.windows.net/media/"
+else:
+    # --- إعدادات التخزين المحلي ---
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    }
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
 
 TEMPLATES = [
     {
@@ -358,48 +350,33 @@ UNFOLD = {
     "STYLES": [lambda request: static("css/admin_sticky.css")],
 }
 
-
-
-# ==============================================================================
-# 🚧 REDIRECTS & EMAIL
-# ==============================================================================
-LOGIN_URL = '/auth/login/'
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/auth/login/'
-
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
 # ==============================================================================
 # 👮 CSP & Security (Web Focused)
 # ==============================================================================
 
-# قائمة المصادر الموثوقة (يجب إضافة العناوين التي تفتح منها الموقع)
+# السماح للنطاقات الحقيقية في Azure
 CSRF_TRUSTED_ORIGINS = env.list(
     'CSRF_TRUSTED_ORIGINS',
     default=[
         "http://localhost:8000",
         "http://127.0.0.1:8000",
-        "https://camp-web.graymushroom-26f94677.norwayeast.azurecontainerapps.io",
+        "https://*.azurecontainerapps.io", # للسماح بأي تطبيق على Azure
     ]
 )
-
 
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": ["'self'"],
-        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-        "img-src": ["'self'", "data:", "https://www.gravatar.com", "https://*.blob.core.windows.net",],
+        "img-src": ["'self'", "data:", "https://www.gravatar.com", "https://*.blob.core.windows.net"],
         
         "connect-src": [
             "'self'",
             "ws://localhost:8000",
             "ws://127.0.0.1:8000",
-            "ws://host.docker.internal:8000",
-            "ws://192.168.1.50:8000", # IP جهازك للموبايل
-             # يفضل إضافة رابط موقعك في Azure هنا أيضاً لضمان عمل الويب سوكيت
-            "wss://*.azurecontainerapps.io",
+            "wss://*.azurecontainerapps.io", # للسماح بالويب سوكيت في Azure
         ],
     }
 }
@@ -418,40 +395,3 @@ CSRF_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = 'DENY'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
-
-
-
-
-# ==============================================================================
-# ☁️ CLOUD STORAGE (Azure Blob)
-# ==============================================================================
-
-# نتحقق هل نحن في بيئة الإنتاج؟ (عبر متغير بيئة سنضعه في Azure لاحقاً)
-IN_AZURE_DEPLOYMENT = env.bool('IN_AZURE_DEPLOYMENT', False)
-
-if IN_AZURE_DEPLOYMENT:
-    # 1. إعدادات تخزين الصور (Media) في Azure Blob
-    STORAGES = {
-        "default": {
-            "BACKEND": "storages.backends.azure_storage.AzureStorage",
-            "OPTIONS": {
-                "account_name": env('AZURE_STORAGE_ACCOUNT_NAME'),
-                "account_key": env('AZURE_STORAGE_ACCOUNT_KEY'),
-                "azure_container": "media",
-                "expiration_secs": None,
-            },
-        },
-        # ملفات الستاتيك (CSS/JS) تبقى مع WhiteNoise لأنه أسرع وأرخص
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        },
-    }
-    
-    MEDIA_URL = f"https://{env('AZURE_STORAGE_ACCOUNT_NAME')}.blob.core.windows.net/media/"
-
-else:
-    # الإعدادات المحلية القديمة (Localhost)
-    STORAGES = {
-        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
-    }
