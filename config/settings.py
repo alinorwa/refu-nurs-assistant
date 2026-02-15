@@ -33,6 +33,14 @@ DB_ENCRYPTION_KEY = env('DB_ENCRYPTION_KEY', default='sEcret_Key_Must_Be_32_UrlS
 ALLOWED_HOSTS = ["*"]
 
 # ==============================================================================
+# 🌐 INTERNATIONALIZATION
+# ==============================================================================
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = 'Europe/Oslo'
+USE_I18N = True
+USE_TZ = True
+
+# ==============================================================================
 # 🧩 APPS & MIDDLEWARE
 # ==============================================================================
 
@@ -91,7 +99,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': env('DB_NAME', default='camp_medical_db'),
         'USER': env('DB_USER', default='postgres'),
-        'PASSWORD': env('DB_PASSWORD', default='123'), 
+        'PASSWORD': env('DB_PASSWORD',), 
         'HOST': env('DB_HOST', default='host.docker.internal'),
         'PORT': env('DB_PORT', default='5432'),
     }
@@ -161,7 +169,7 @@ else:
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE # سيتم تعريف TIME_ZONE في الأسفل
+CELERY_TIMEZONE = TIME_ZONE 
 CELERY_WORKER_CONCURRENCY = 2
 
 from celery.schedules import crontab
@@ -176,13 +184,7 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# ==============================================================================
-# 🌐 INTERNATIONALIZATION
-# ==============================================================================
-LANGUAGE_CODE = "en-us"
-TIME_ZONE = 'Europe/Oslo'
-USE_I18N = True
-USE_TZ = True
+
 
 # ==============================================================================
 # 🔒 AUTH & SECURITY
