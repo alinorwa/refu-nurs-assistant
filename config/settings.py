@@ -126,13 +126,18 @@ DATABASES = {
 REDIS_URL = env('REDIS_URL', default=None)
 
 if REDIS_URL:
+    import ssl
      # --- إعدادات الإنتاج (Azure) ---
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [REDIS_URL],
-                # 🛑 الإضافة الجديدة والضرورية لـ Azure:
+                "hosts": [
+                    {
+                        "address": REDIS_URL,  # الرابط الكامل (rediss://...)
+                        "ssl_cert_reqs": ssl.CERT_NONE,  # 🛑 الحل السحري: تجاهل التحقق من الشهادة
+                    }
+                ],
                 "capacity": 1500,
                 "expiry": 10,
             },
@@ -145,18 +150,20 @@ if REDIS_URL:
             "LOCATION": REDIS_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                # ضروري لتجاهل مشاكل شهادات SSL في بعض الأحيان
-                "CONNECTION_POOL_KWARGS": {"ssl_cert_reqs": None},
+                # الكاش يحتاج هذا التنسيق المختلف
+                "CONNECTION_POOL_KWARGS": {
+                    "ssl_cert_reqs": ssl.CERT_NONE
+                }, 
             }
         }
     }
     
-    # إعدادات Celery للإنتاج
+    # Celery
     CELERY_BROKER_URL = REDIS_URL
     CELERY_RESULT_BACKEND = REDIS_URL
-    # 🛑 إضافة خيارات SSL لـ Celery أيضاً
-    CELERY_REDIS_BACKEND_USE_SSL = {"ssl_cert_reqs": None}
-    CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": None}
+    # إعدادات SSL الخاصة بـ Celery
+    CELERY_REDIS_BACKEND_USE_SSL = {"ssl_cert_reqs": ssl.CERT_NONE}
+    CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": ssl.CERT_NONE}
 
 else:
     # --- إعدادات التطوير المحلي (Docker Local) ---
