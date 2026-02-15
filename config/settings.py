@@ -126,12 +126,15 @@ DATABASES = {
 REDIS_URL = env('REDIS_URL', default=None)
 
 if REDIS_URL:
-    # --- إعدادات الإنتاج (Azure) ---
+     # --- إعدادات الإنتاج (Azure) ---
     CHANNEL_LAYERS = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [REDIS_URL], # نستخدم الرابط الكامل كما هو
+                "hosts": [REDIS_URL],
+                # 🛑 الإضافة الجديدة والضرورية لـ Azure:
+                "capacity": 1500,
+                "expiry": 10,
             },
         },
     }
@@ -151,6 +154,9 @@ if REDIS_URL:
     # إعدادات Celery للإنتاج
     CELERY_BROKER_URL = REDIS_URL
     CELERY_RESULT_BACKEND = REDIS_URL
+    # 🛑 إضافة خيارات SSL لـ Celery أيضاً
+    CELERY_REDIS_BACKEND_USE_SSL = {"ssl_cert_reqs": None}
+    CELERY_BROKER_USE_SSL = {"ssl_cert_reqs": None}
 
 else:
     # --- إعدادات التطوير المحلي (Docker Local) ---
@@ -188,11 +194,7 @@ CELERY_WORKER_CONCURRENCY = 2
 # 🐇 CELERY
 # ==============================================================================
 
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_WORKER_CONCURRENCY = 2
+
 
 from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
